@@ -5,7 +5,7 @@
 A frankensteinian amalgamation of notebooks, models and techniques for the generation of AI Art and Animations.
 
 [to be updated with further info soon]
-
+## sure
 ## Contributing
 This project uses a special conversion tool to convert the python files into notebooks for easier development.
 
