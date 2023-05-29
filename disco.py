@@ -12,7 +12,7 @@
 # !!   "id": "TitleTop"
 # !! }}
 """
-# Disco Diffusion v5.6 - Now with portrait_generator_v001
+# Disco Diffusion v5.7 - Now with MiDaS (3D mode) not being broken
 
 Disco Diffusion - http://discodiffusion.com/ , https://github.com/alembics/disco-diffusion
 
@@ -314,6 +314,15 @@ if skip_for_run_all == False:
   v5.6 Update: Jul 13th 2022 - Felipe3DArtist integration by gandamu / Adam Letts
 
       portrait_generator_v001 diffusion model integrated
+
+  v5.61 Update: Aug 21st 2022 - gandamu / Adam Letts
+
+      Correct progress bars issue caused by recent Google Colab environment changes
+      Adjust 512x512 diffusion model download URI priority due to issues with the previous primary source
+
+  v5.7 Update: Dec 31st 2022 - Steffen Moelter (with minor colab-convert integration by gandamu)
+
+      Clone MiDaS v3 specifically. This fixes 3D mode. It had been broken since MiDaS v3.1 introduced an incompatibility.
     '''
   )
 
@@ -423,11 +432,14 @@ else:
 #@title 1.2 Prepare Folders
 import subprocess, os, sys, ipykernel
 
-def gitclone(url, targetdir=None):
-    if targetdir:
-        res = subprocess.run(['git', 'clone', url, targetdir], stdout=subprocess.PIPE).stdout.decode('utf-8')
-    else:
-        res = subprocess.run(['git', 'clone', url], stdout=subprocess.PIPE).stdout.decode('utf-8')
+def gitclone(url, target_dir=None, branch_arg=None):
+    run_args = ['git', 'clone']
+    if branch_arg:
+        run_args.extend(['-b', branch_arg])
+    run_args.append(url)
+    if target_dir:
+        run_args.append(target_dir)
+    res = subprocess.run(run_args, stdout=subprocess.PIPE).stdout.decode('utf-8')
     print(res)
 
 def pipi(modulestr):
@@ -450,6 +462,11 @@ try:
     google_drive = True #@param {type:"boolean"}
     #@markdown Click here if you'd like to save the diffusion model checkpoint file to (and/or load from) your Google Drive:
     save_models_to_google_drive = True #@param {type:"boolean"}
+    print("Downgrading ipywidgets to latest 7.x in order to enable custom widget manager (for tqdm progress bars)")
+    multipip_res = subprocess.run(['pip', 'install', 'ipywidgets>=7,<8'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+    print(multipip_res)
+    from google.colab import output
+    output.enable_custom_widget_manager()
 except:
     is_colab = False
     google_drive = False
@@ -571,7 +588,7 @@ try:
     from midas.dpt_depth import DPTDepthModel
 except:
     if not os.path.exists('MiDaS'):
-        gitclone("https://github.com/isl-org/MiDaS.git")
+        gitclone("https://github.com/isl-org/MiDaS.git", branch_arg="v3")
     if not os.path.exists('MiDaS/midas_utils.py'):
         shutil.move('MiDaS/utils.py', 'MiDaS/midas_utils.py')
     if not os.path.exists(f'{model_path}/dpt_large-midas-2f21e586.pt'):
@@ -1640,7 +1657,7 @@ def save_settings():
       'video_init_blend_mode':video_init_blend_mode
     }
     # print('Settings:', setting_list)
-    with open(f"{batchFolder}/{batch_name}({batchNum})_settings.txt", "w+") as f:   #save settings
+    with open(f"{batchFolder}/{batch_name}({batchNum})_settings.txt", "w+", encoding="utf-8") as f:   #save settings
         json.dump(setting_list, f, ensure_ascii=False, indent=4)
 
 # %%
@@ -1864,7 +1881,7 @@ check_model_SHA = False #@param{type:"boolean"}
 
 diff_model_map = {
     '256x256_diffusion_uncond': { 'downloaded': False, 'sha': 'a37c32fffd316cd494cf3f35b339936debdc1576dad13fe57c42399a5dbc78b1', 'uri_list': ['https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt', 'https://www.dropbox.com/s/9tqnqo930mpnpcn/256x256_diffusion_uncond.pt'] },
-    '512x512_diffusion_uncond_finetune_008100': { 'downloaded': False, 'sha': '9c111ab89e214862b76e1fa6a1b3f1d329b1a88281885943d2cdbe357ad57648', 'uri_list': ['https://the-eye.eu/public/AI/models/512x512_diffusion_unconditional_ImageNet/512x512_diffusion_uncond_finetune_008100.pt', 'https://huggingface.co/lowlevelware/512x512_diffusion_unconditional_ImageNet/resolve/main/512x512_diffusion_uncond_finetune_008100.pt'] },
+    '512x512_diffusion_uncond_finetune_008100': { 'downloaded': False, 'sha': '9c111ab89e214862b76e1fa6a1b3f1d329b1a88281885943d2cdbe357ad57648', 'uri_list': ['https://huggingface.co/lowlevelware/512x512_diffusion_unconditional_ImageNet/resolve/main/512x512_diffusion_uncond_finetune_008100.pt', 'https://the-eye.eu/public/AI/models/512x512_diffusion_unconditional_ImageNet/512x512_diffusion_uncond_finetune_008100.pt'] },
     'portrait_generator_v001': { 'downloaded': False, 'sha': 'b7e8c747af880d4480b6707006f1ace000b058dd0eac5bb13558ba3752d9b5b9', 'uri_list': ['https://huggingface.co/felipe3dartist/portrait_generator_v001/resolve/main/portrait_generator_v001_ema_0.9999_1MM.pt'] },
     'pixelartdiffusion_expanded': { 'downloaded': False, 'sha': 'a73b40556634034bf43b5a716b531b46fb1ab890634d854f5bcbbef56838739a', 'uri_list': ['https://huggingface.co/KaliYuga/PADexpanded/resolve/main/PADexpanded.pt'] },
     'pixel_art_diffusion_hard_256': { 'downloaded': False, 'sha': 'be4a9de943ec06eef32c65a1008c60ad017723a4d35dc13169c66bb322234161', 'uri_list': ['https://huggingface.co/KaliYuga/pixel_art_diffusion_hard_256/resolve/main/pixel_art_diffusion_hard_256.pt'] },
@@ -1873,7 +1890,7 @@ diff_model_map = {
     'watercolordiffusion_2': { 'downloaded': False, 'sha': '49c281b6092c61c49b0f1f8da93af9b94be7e0c20c71e662e2aa26fee0e4b1a9', 'uri_list': ['https://huggingface.co/KaliYuga/watercolordiffusion_2/resolve/main/watercolordiffusion_2.pt'] },
     'watercolordiffusion': { 'downloaded': False, 'sha': 'a3e6522f0c8f278f90788298d66383b11ac763dd5e0d62f8252c962c23950bd6', 'uri_list': ['https://huggingface.co/KaliYuga/watercolordiffusion/resolve/main/watercolordiffusion.pt'] },
     'PulpSciFiDiffusion': { 'downloaded': False, 'sha': 'b79e62613b9f50b8a3173e5f61f0320c7dbb16efad42a92ec94d014f6e17337f', 'uri_list': ['https://huggingface.co/KaliYuga/PulpSciFiDiffusion/resolve/main/PulpSciFiDiffusion.pt'] },
-    'secondary': { 'downloaded': False, 'sha': '983e3de6f95c88c81b2ca7ebb2c217933be1973b1ff058776b970f901584613a', 'uri_list': ['https://the-eye.eu/public/AI/models/v-diffusion/secondary_model_imagenet_2.pth', 'https://ipfs.pollinations.ai/ipfs/bafybeibaawhhk7fhyhvmm7x24zwwkeuocuizbqbcg5nqx64jq42j75rdiy/secondary_model_imagenet_2.pth'] },
+    'secondary': { 'downloaded': False, 'sha': '983e3de6f95c88c81b2ca7ebb2c217933be1973b1ff058776b970f901584613a', 'uri_list': ['https://huggingface.co/spaces/huggi/secondary_model_imagenet_2.pth/resolve/main/secondary_model_imagenet_2.pth', 'https://the-eye.eu/public/AI/models/v-diffusion/secondary_model_imagenet_2.pth', 'https://ipfs.pollinations.ai/ipfs/bafybeibaawhhk7fhyhvmm7x24zwwkeuocuizbqbcg5nqx64jq42j75rdiy/secondary_model_imagenet_2.pth'] },
 }
 
 kaliyuga_pixel_art_model_names = ['pixelartdiffusion_expanded', 'pixel_art_diffusion_hard_256', 'pixel_art_diffusion_soft_256', 'pixelartdiffusion4k', 'PulpSciFiDiffusion']
@@ -3247,7 +3264,7 @@ else:
 # !!       "FlowFns2"
 # !!     ],
 # !!     "machine_shape": "hm",
-# !!     "name": "Disco Diffusion v5.6 [Now with portrait_generator_v001]",
+# !!     "name": "Disco Diffusion v5.61 [Now with portrait_generator_v001]",
 # !!     "private_outputs": true,
 # !!     "provenance": [],
 # !!     "include_colab_link": true
