@@ -12,11 +12,13 @@
 # !!   "id": "TitleTop"
 # !! }}
 """
-# Disco Diffusion v5.2 - Now with VR Mode
+# Disco Diffusion v5.7 - Now with MiDaS (3D mode) not being broken
+
+Disco Diffusion - http://discodiffusion.com/ , https://github.com/alembics/disco-diffusion
 
 In case of confusion, Disco is the name of this notebook edit. The diffusion model in use is Katherine Crowson's fine-tuned 512x512 model
 
-For issues, join the [Disco Diffusion Discord](https://discord.gg/msEZBy4HxA) or message us on twitter at [@somnai_dreams](https://twitter.com/somnai_dreams) or [@gandamu](https://twitter.com/gandamu_ml)
+For issues, join the [Disco Diffusion Discord](https://discord.gg/msEZBy4HxA) or message us on twitter at [@somnai_dreams](https://twitter.com/somnai_dreams) or [@gandamu_ml](https://twitter.com/gandamu_ml)
 """
 
 # %%
@@ -38,7 +40,7 @@ Original notebook by Katherine Crowson (https://github.com/crowsonkb, https://tw
 
 Modified by Daniel Russell (https://github.com/russelldc, https://twitter.com/danielrussruss) to include (hopefully) optimal params for quick generations in 15-100 timesteps rather than 1000, as well as more robust augmentations.
 
-Further improvements from Dango233 and nsheppard helped improve the quality of diffusion in general, and especially so for shorter runs like this notebook aims to achieve.
+Further improvements from Dango233 and nshepperd helped improve the quality of diffusion in general, and especially so for shorter runs like this notebook aims to achieve.
 
 Vark added code to load in multiple Clip models at once, which all prompts are evaluated against, which may greatly improve accuracy.
 
@@ -59,6 +61,16 @@ Turbo feature by Chris Allen (https://twitter.com/zippy731)
 Improvements to ability to run on local systems, Windows support, and dependency installation by HostsServer (https://twitter.com/HostsServer)
 
 VR Mode by Tom Mason (https://twitter.com/nin_artificial)
+
+Horizontal and Vertical symmetry functionality by nshepperd. Symmetry transformation_steps by huemin (https://twitter.com/huemin_art). Symmetry integration into Disco Diffusion by Dmitrii Tochilkin (https://twitter.com/cut_pow).
+
+Warp and custom model support by Alex Spirin (https://twitter.com/devdef).
+
+Pixel Art Diffusion, Watercolor Diffusion, and Pulp SciFi Diffusion models from KaliYuga (https://twitter.com/KaliYuga_ai). Follow KaliYuga's Twitter for the latest models and for notebooks with specialized settings.
+
+Integration of OpenCLIP models and initiation of integration of KaliYuga models by Palmweaver / Chris Scalf (https://twitter.com/ChrisScalf11)
+
+Integrated portrait_generator_v001 from Felipe3DArtist (https://twitter.com/Felipe3DArtist)
 """
 
 # %%
@@ -128,6 +140,8 @@ Copyright (c) 2021 Maxwell Ingham
 
 Copyright (c) 2022 Adam Letts 
 
+Copyright (c) 2022 Alex Spirin
+
 Permission is hereby granted, free of charge, to any person obtaining a copy
 of this software and associated documentation files (the "Software"), to deal
 in the Software without restriction, including without limitation the rights
@@ -145,6 +159,23 @@ AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
 LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 THE SOFTWARE.
+
+--
+flow-related - https://github.com/NVIDIA/flownet2-pytorch/blob/master/LICENSE
+--
+Copyright 2017 NVIDIA CORPORATION
+
+Licensed under the Apache License, Version 2.0 (the "License");
+you may not use this file except in compliance with the License.
+You may obtain a copy of the License at
+
+    http://www.apache.org/licenses/LICENSE-2.0
+
+Unless required by applicable law or agreed to in writing, software
+distributed under the License is distributed on an "AS IS" BASIS,
+WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+See the License for the specific language governing permissions and
+limitations under the License.
 """
 
 # %%
@@ -190,7 +221,7 @@ if skip_for_run_all == False:
 
       Perlin now changes properly within batches (not sure where this perlin_regen code came from originally, but thank you)
 
-  v4 Update: Jan 2021 - Somnai
+  v4 Update: Jan 2022 - Somnai
 
       Implemented Diffusion Zooming
 
@@ -198,7 +229,7 @@ if skip_for_run_all == False:
 
       Made a bunch of edits to processes
   
-  v4.1 Update: Jan  14th 2021 - Somnai
+  v4.1 Update: Jan 14th 2022 - Somnai
 
       Added video input mode
 
@@ -260,7 +291,39 @@ if skip_for_run_all == False:
 
       VR Mode
 
-      '''
+  v5.3 Update: Jun 10th 2022 - nshepperd, huemin, cut_pow / Dmitrii Tochilkin
+
+      Horizontal and Vertical symmetry
+
+      Addition of ViT-L/14@336px model (requires high VRAM)
+
+  v5.4 Update: Jun 14th 2022 - devdef / Alex Spirin, Alex's Warp changes integrated into DD main by gandamu / Adam Letts
+
+      Warp mode - for smooth/continuous video input results leveraging optical flow estimation and frame blending
+
+      Custom models support
+
+  v5.5 Update: Jul 11th 2022 - Palmweaver / Chris Scalf, KaliYuga_ai, further DD integration by gandamu / Adam Letts
+
+      OpenCLIP models integration
+
+      Pixel Art Diffusion, Watercolor Diffusion, and Pulp SciFi Diffusion models
+
+      cut_ic_pow scheduling
+
+  v5.6 Update: Jul 13th 2022 - Felipe3DArtist integration by gandamu / Adam Letts
+
+      portrait_generator_v001 diffusion model integrated
+
+  v5.61 Update: Aug 21st 2022 - gandamu / Adam Letts
+
+      Correct progress bars issue caused by recent Google Colab environment changes
+      Adjust 512x512 diffusion model download URI priority due to issues with the previous primary source
+
+  v5.7 Update: Dec 31st 2022 - Steffen Moelter (with minor colab-convert integration by gandamu)
+
+      Clone MiDaS v3 specifically. This fixes 3D mode. It had been broken since MiDaS v3.1 introduced an incompatibility.
+    '''
   )
 
 # %%
@@ -313,6 +376,12 @@ Setting | Description | Default
 `fuzzy_prompt` | Controls whether to add multiple noisy prompts to the prompt losses | False
 `rand_mag` | Controls the magnitude of the random noise | 0.1
 `eta` | DDIM hyperparameter | 0.5
+`use_vertical_symmetry` | Enforce symmetry over x axis of the image on [`tr_st`*`steps` for `tr_st` in `transformation_steps`] steps of the diffusion process | False
+`use_horizontal_symmetry` | Enforce symmetry over y axis of the image on [`tr_st`*`steps` for `tr_st` in `transformation_steps`] steps of the diffusion process | False
+`transformation_steps` | Steps (expressed in percentages) in which the symmetry is enforced | [0.01]
+`video_init_flow_warp` | Flow warp enabled | True
+`video_init_flow_blend` | 0 - you get raw input, 1 - you get warped diffused previous frame  | 0.999
+`video_init_check_consistency` | TBD check forward-backward flow consistency (uncheck unless there are too many warping artifacts) | False
 
 ..
 
@@ -363,8 +432,14 @@ else:
 #@title 1.2 Prepare Folders
 import subprocess, os, sys, ipykernel
 
-def gitclone(url):
-    res = subprocess.run(['git', 'clone', url], stdout=subprocess.PIPE).stdout.decode('utf-8')
+def gitclone(url, target_dir=None, branch_arg=None):
+    run_args = ['git', 'clone']
+    if branch_arg:
+        run_args.extend(['-b', branch_arg])
+    run_args.append(url)
+    if target_dir:
+        run_args.append(target_dir)
+    res = subprocess.run(run_args, stdout=subprocess.PIPE).stdout.decode('utf-8')
     print(res)
 
 def pipi(modulestr):
@@ -387,6 +462,11 @@ try:
     google_drive = True #@param {type:"boolean"}
     #@markdown Click here if you'd like to save the diffusion model checkpoint file to (and/or load from) your Google Drive:
     save_models_to_google_drive = True #@param {type:"boolean"}
+    print("Downgrading ipywidgets to latest 7.x in order to enable custom widget manager (for tqdm progress bars)")
+    multipip_res = subprocess.run(['pip', 'install', 'ipywidgets>=7,<8'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+    print(multipip_res)
+    from google.colab import output
+    output.enable_custom_widget_manager()
 except:
     is_colab = False
     google_drive = False
@@ -476,10 +556,18 @@ except:
     sys.path.append(f'{PROJECT_DIR}/CLIP')
 
 try:
+    import open_clip
+except:
+    if not os.path.exists("open_clip/src"):
+        gitclone("https://github.com/mlfoundations/open_clip.git")
+    sys.path.append(f'{PROJECT_DIR}/open_clip/src')
+    import open_clip
+
+try:
     from guided_diffusion.script_util import create_model_and_diffusion
 except:
     if not os.path.exists("guided-diffusion"):
-        gitclone("https://github.com/crowsonkb/guided-diffusion")
+        gitclone("https://github.com/kostarion/guided-diffusion")
     sys.path.append(f'{PROJECT_DIR}/guided-diffusion')
 
 try:
@@ -500,7 +588,7 @@ try:
     from midas.dpt_depth import DPTDepthModel
 except:
     if not os.path.exists('MiDaS'):
-        gitclone("https://github.com/isl-org/MiDaS.git")
+        gitclone("https://github.com/isl-org/MiDaS.git", branch_arg="v3")
     if not os.path.exists('MiDaS/midas_utils.py'):
         shutil.move('MiDaS/utils.py', 'MiDaS/midas_utils.py')
     if not os.path.exists(f'{model_path}/dpt_large-midas-2f21e586.pt'):
@@ -1018,6 +1106,17 @@ def do_3d_step(img_filepath, frame_num, midas_model, midas_transform):
                                           sampling_mode=args.sampling_mode, midas_weight=args.midas_weight)
   return next_step_pil
 
+def symmetry_transformation_fn(x):
+    if args.use_horizontal_symmetry:
+        [n, c, h, w] = x.size()
+        x = torch.concat((x[:, :, :, :w//2], torch.flip(x[:, :, :, :w//2], [-1])), -1)
+        print("horizontal symmetry applied")
+    if args.use_vertical_symmetry:
+        [n, c, h, w] = x.size()
+        x = torch.concat((x[:, :, :h//2, :], torch.flip(x[:, :, :h//2, :], [-2])), -2)
+        print("vertical symmetry applied")
+    return x
+
 def do_run():
   seed = args.seed
   print(range(args.start_frame, args.max_frames))
@@ -1131,11 +1230,33 @@ def do_run():
           skip_steps = args.calc_frames_skip_steps
 
       if  args.animation_mode == "Video Input":
+        init_scale = args.video_init_frames_scale
+        skip_steps = args.calc_frames_skip_steps
         if not video_init_seed_continuity:
           seed += 1
-        init_image = f'{videoFramesFolder}/{frame_num+1:04}.jpg'
-        init_scale = args.frames_scale
-        skip_steps = args.calc_frames_skip_steps
+        if video_init_flow_warp:
+          if frame_num == 0: 
+            skip_steps = args.video_init_skip_steps
+            init_image = f'{videoFramesFolder}/{frame_num+1:04}.jpg'
+          if frame_num > 0: 
+            prev = PIL.Image.open(batchFolder+f"/{batch_name}({batchNum})_{frame_num-1:04}.png")
+            
+            frame1_path = f'{videoFramesFolder}/{frame_num:04}.jpg'
+            frame2 = PIL.Image.open(f'{videoFramesFolder}/{frame_num+1:04}.jpg')
+            flo_path = f"/{flo_folder}/{frame1_path.split('/')[-1]}.npy"
+            
+            init_image = 'warped.png'
+            print(video_init_flow_blend)
+            weights_path = None
+            if video_init_check_consistency:
+                # TBD
+                pass
+ 
+            warp(prev, frame2, flo_path, blend=video_init_flow_blend, weights_path=weights_path).save(init_image)
+            
+        else:
+          init_image = f'{videoFramesFolder}/{frame_num+1:04}.jpg'
+
 
       loss_values = []
   
@@ -1170,7 +1291,6 @@ def do_run():
             cutn = 16
             model_stat = {"clip_model":None,"target_embeds":[],"make_cutouts":None,"weights":[]}
             model_stat["clip_model"] = clip_model
-            
             
             for prompt in frame_prompt:
                 txt, weight = parse_prompt(prompt)
@@ -1259,7 +1379,9 @@ def do_run():
 
                     cuts = MakeCutoutsDango(input_resolution,
                             Overview= args.cut_overview[1000-t_int], 
-                            InnerCrop = args.cut_innercut[1000-t_int], IC_Size_Pow=args.cut_ic_pow, IC_Grey_P = args.cut_icgray_p[1000-t_int]
+                            InnerCrop = args.cut_innercut[1000-t_int],
+                            IC_Size_Pow=args.cut_ic_pow[1000-t_int],
+                            IC_Grey_P = args.cut_icgray_p[1000-t_int]
                             )
                     clip_in = normalize(cuts(x_in.add(1).div(2)))
                     image_embeds = model_stat["clip_model"].encode_image(clip_in).float()
@@ -1275,9 +1397,9 @@ def do_run():
                 range_losses = range_loss(out['pred_xstart'])
               sat_losses = torch.abs(x_in - x_in.clamp(min=-1,max=1)).mean()
               loss = tv_losses.sum() * tv_scale + range_losses.sum() * range_scale + sat_losses.sum() * sat_scale
-              if init is not None and args.init_scale:
+              if init is not None and init_scale:
                   init_losses = lpips_model(x_in, init)
-                  loss = loss + init_losses.sum() * args.init_scale
+                  loss = loss + init_losses.sum() * init_scale
               x_in_grad += torch.autograd.grad(loss, x_in)[0]
               if torch.isnan(x_in_grad).any()==False:
                   grad = -torch.autograd.grad(x_in, x, x_in_grad)[0]
@@ -1325,6 +1447,8 @@ def do_run():
                   init_image=init,
                   randomize_class=randomize_class,
                   eta=eta,
+                  transformation_fn=symmetry_transformation_fn,
+                  transformation_percent=args.transformation_percent
               )
           else:
               samples = sample_fn(
@@ -1428,81 +1552,113 @@ def generate_eye_views(trans_scale,batchFolder,filename,frame_num,midas_model, m
       transformed_image.save(eye_file_path)
 
 def save_settings():
-  setting_list = {
-    'text_prompts': text_prompts,
-    'image_prompts': image_prompts,
-    'clip_guidance_scale': clip_guidance_scale,
-    'tv_scale': tv_scale,
-    'range_scale': range_scale,
-    'sat_scale': sat_scale,
-    # 'cutn': cutn,
-    'cutn_batches': cutn_batches,
-    'max_frames': max_frames,
-    'interp_spline': interp_spline,
-    # 'rotation_per_frame': rotation_per_frame,
-    'init_image': init_image,
-    'init_scale': init_scale,
-    'skip_steps': skip_steps,
-    # 'zoom_per_frame': zoom_per_frame,
-    'frames_scale': frames_scale,
-    'frames_skip_steps': frames_skip_steps,
-    'perlin_init': perlin_init,
-    'perlin_mode': perlin_mode,
-    'skip_augs': skip_augs,
-    'randomize_class': randomize_class,
-    'clip_denoised': clip_denoised,
-    'clamp_grad': clamp_grad,
-    'clamp_max': clamp_max,
-    'seed': seed,
-    'fuzzy_prompt': fuzzy_prompt,
-    'rand_mag': rand_mag,
-    'eta': eta,
-    'width': width_height[0],
-    'height': width_height[1],
-    'diffusion_model': diffusion_model,
-    'use_secondary_model': use_secondary_model,
-    'steps': steps,
-    'diffusion_steps': diffusion_steps,
-    'diffusion_sampling_mode': diffusion_sampling_mode,
-    'ViTB32': ViTB32,
-    'ViTB16': ViTB16,
-    'ViTL14': ViTL14,
-    'RN101': RN101,
-    'RN50': RN50,
-    'RN50x4': RN50x4,
-    'RN50x16': RN50x16,
-    'RN50x64': RN50x64,
-    'cut_overview': str(cut_overview),
-    'cut_innercut': str(cut_innercut),
-    'cut_ic_pow': cut_ic_pow,
-    'cut_icgray_p': str(cut_icgray_p),
-    'key_frames': key_frames,
-    'max_frames': max_frames,
-    'angle': angle,
-    'zoom': zoom,
-    'translation_x': translation_x,
-    'translation_y': translation_y,
-    'translation_z': translation_z,
-    'rotation_3d_x': rotation_3d_x,
-    'rotation_3d_y': rotation_3d_y,
-    'rotation_3d_z': rotation_3d_z,
-    'midas_depth_model': midas_depth_model,
-    'midas_weight': midas_weight,
-    'near_plane': near_plane,
-    'far_plane': far_plane,
-    'fov': fov,
-    'padding_mode': padding_mode,
-    'sampling_mode': sampling_mode,
-    'video_init_path':video_init_path,
-    'extract_nth_frame':extract_nth_frame,
-    'video_init_seed_continuity': video_init_seed_continuity,
-    'turbo_mode':turbo_mode,
-    'turbo_steps':turbo_steps,
-    'turbo_preroll':turbo_preroll,
-  }
-  # print('Settings:', setting_list)
-  with open(f"{batchFolder}/{batch_name}({batchNum})_settings.txt", "w+") as f:   #save settings
-    json.dump(setting_list, f, ensure_ascii=False, indent=4)
+    setting_list = {
+      'text_prompts': text_prompts,
+      'image_prompts': image_prompts,
+      'clip_guidance_scale': clip_guidance_scale,
+      'tv_scale': tv_scale,
+      'range_scale': range_scale,
+      'sat_scale': sat_scale,
+      # 'cutn': cutn,
+      'cutn_batches': cutn_batches,
+      'max_frames': max_frames,
+      'interp_spline': interp_spline,
+      # 'rotation_per_frame': rotation_per_frame,
+      'init_image': init_image,
+      'init_scale': init_scale,
+      'skip_steps': skip_steps,
+      # 'zoom_per_frame': zoom_per_frame,
+      'frames_scale': frames_scale,
+      'frames_skip_steps': frames_skip_steps,
+      'perlin_init': perlin_init,
+      'perlin_mode': perlin_mode,
+      'skip_augs': skip_augs,
+      'randomize_class': randomize_class,
+      'clip_denoised': clip_denoised,
+      'clamp_grad': clamp_grad,
+      'clamp_max': clamp_max,
+      'seed': seed,
+      'fuzzy_prompt': fuzzy_prompt,
+      'rand_mag': rand_mag,
+      'eta': eta,
+      'width': width_height[0],
+      'height': width_height[1],
+      'diffusion_model': diffusion_model,
+      'use_secondary_model': use_secondary_model,
+      'steps': steps,
+      'diffusion_steps': diffusion_steps,
+      'diffusion_sampling_mode': diffusion_sampling_mode,
+      'ViTB32': ViTB32,
+      'ViTB16': ViTB16,
+      'ViTL14': ViTL14,
+      'ViTL14_336px': ViTL14_336px,
+      'RN101': RN101,
+      'RN50': RN50,
+      'RN50x4': RN50x4,
+      'RN50x16': RN50x16,
+      'RN50x64': RN50x64,
+      'ViTB32_laion2b_e16': ViTB32_laion2b_e16,
+      'ViTB32_laion400m_e31': ViTB32_laion400m_e31,
+      'ViTB32_laion400m_32': ViTB32_laion400m_32,
+      'ViTB32quickgelu_laion400m_e31': ViTB32quickgelu_laion400m_e31,
+      'ViTB32quickgelu_laion400m_e32': ViTB32quickgelu_laion400m_e32,
+      'ViTB16_laion400m_e31': ViTB16_laion400m_e31,
+      'ViTB16_laion400m_e32': ViTB16_laion400m_e32,
+      'RN50_yffcc15m': RN50_yffcc15m,
+      'RN50_cc12m': RN50_cc12m,
+      'RN50_quickgelu_yfcc15m': RN50_quickgelu_yfcc15m,
+      'RN50_quickgelu_cc12m': RN50_quickgelu_cc12m,
+      'RN101_yfcc15m': RN101_yfcc15m,
+      'RN101_quickgelu_yfcc15m': RN101_quickgelu_yfcc15m,
+      'cut_overview': str(cut_overview),
+      'cut_innercut': str(cut_innercut),
+      'cut_ic_pow': str(cut_ic_pow),
+      'cut_icgray_p': str(cut_icgray_p),
+      'key_frames': key_frames,
+      'max_frames': max_frames,
+      'angle': angle,
+      'zoom': zoom,
+      'translation_x': translation_x,
+      'translation_y': translation_y,
+      'translation_z': translation_z,
+      'rotation_3d_x': rotation_3d_x,
+      'rotation_3d_y': rotation_3d_y,
+      'rotation_3d_z': rotation_3d_z,
+      'midas_depth_model': midas_depth_model,
+      'midas_weight': midas_weight,
+      'near_plane': near_plane,
+      'far_plane': far_plane,
+      'fov': fov,
+      'padding_mode': padding_mode,
+      'sampling_mode': sampling_mode,
+      'video_init_path':video_init_path,
+      'extract_nth_frame':extract_nth_frame,
+      'video_init_seed_continuity': video_init_seed_continuity,
+      'turbo_mode':turbo_mode,
+      'turbo_steps':turbo_steps,
+      'turbo_preroll':turbo_preroll,
+      'use_horizontal_symmetry':use_horizontal_symmetry,
+      'use_vertical_symmetry':use_vertical_symmetry,
+      'transformation_percent':transformation_percent,
+      #video init settings
+      'video_init_steps': video_init_steps,
+      'video_init_clip_guidance_scale': video_init_clip_guidance_scale,
+      'video_init_tv_scale': video_init_tv_scale,
+      'video_init_range_scale': video_init_range_scale,
+      'video_init_sat_scale': video_init_sat_scale,
+      'video_init_cutn_batches': video_init_cutn_batches,
+      'video_init_skip_steps': video_init_skip_steps,
+      'video_init_frames_scale': video_init_frames_scale,
+      'video_init_frames_skip_steps': video_init_frames_skip_steps,
+      #warp settings
+      'video_init_flow_warp':video_init_flow_warp,
+      'video_init_flow_blend':video_init_flow_blend,
+      'video_init_check_consistency':video_init_check_consistency,
+      'video_init_blend_mode':video_init_blend_mode
+    }
+    # print('Settings:', setting_list)
+    with open(f"{batchFolder}/{batch_name}({batchNum})_settings.txt", "w+", encoding="utf-8") as f:   #save settings
+        json.dump(setting_list, f, ensure_ascii=False, indent=4)
 
 # %%
 # !! {"metadata":{
@@ -1685,132 +1841,104 @@ class SecondaryDiffusionImageNet2(nn.Module):
 # !! {"metadata":{
 # !!   "id": "ModelSettings"
 # !! }}
-#@markdown ####**Models Settings:**
-diffusion_model = "512x512_diffusion_uncond_finetune_008100" #@param ["256x256_diffusion_uncond", "512x512_diffusion_uncond_finetune_008100"]
+#@markdown ####**Models Settings (note: For pixel art, the best is pixelartdiffusion_expanded):**
+diffusion_model = "512x512_diffusion_uncond_finetune_008100" #@param ["256x256_diffusion_uncond", "512x512_diffusion_uncond_finetune_008100", "portrait_generator_v001", "pixelartdiffusion_expanded", "pixel_art_diffusion_hard_256", "pixel_art_diffusion_soft_256", "pixelartdiffusion4k", "watercolordiffusion_2", "watercolordiffusion", "PulpSciFiDiffusion", "custom"]
+
 use_secondary_model = True #@param {type: 'boolean'}
-diffusion_sampling_mode = 'ddim' #@param ['plms','ddim']  
+diffusion_sampling_mode = 'ddim' #@param ['plms','ddim']
+#@markdown #####**Custom model:**
+custom_path = '/content/drive/MyDrive/deep_learning/ddpm/ema_0.9999_058000.pt'#@param {type: 'string'}
 
-
+#@markdown #####**CLIP settings:**
 use_checkpoint = True #@param {type: 'boolean'}
 ViTB32 = True #@param{type:"boolean"}
 ViTB16 = True #@param{type:"boolean"}
 ViTL14 = False #@param{type:"boolean"}
+ViTL14_336px = False #@param{type:"boolean"}
 RN101 = False #@param{type:"boolean"}
 RN50 = True #@param{type:"boolean"}
 RN50x4 = False #@param{type:"boolean"}
 RN50x16 = False #@param{type:"boolean"}
 RN50x64 = False #@param{type:"boolean"}
 
+#@markdown #####**OpenCLIP settings:**
+ViTB32_laion2b_e16 = False #@param{type:"boolean"}
+ViTB32_laion400m_e31 = False #@param{type:"boolean"}
+ViTB32_laion400m_32 = False #@param{type:"boolean"}
+ViTB32quickgelu_laion400m_e31 = False #@param{type:"boolean"}
+ViTB32quickgelu_laion400m_e32 = False #@param{type:"boolean"}
+ViTB16_laion400m_e31 = False #@param{type:"boolean"}
+ViTB16_laion400m_e32 = False #@param{type:"boolean"}
+RN50_yffcc15m = False #@param{type:"boolean"}
+RN50_cc12m = False #@param{type:"boolean"}
+RN50_quickgelu_yfcc15m = False #@param{type:"boolean"}
+RN50_quickgelu_cc12m = False #@param{type:"boolean"}
+RN101_yfcc15m = False #@param{type:"boolean"}
+RN101_quickgelu_yfcc15m = False #@param{type:"boolean"}
+
 #@markdown If you're having issues with model downloads, check this to compare SHA's:
 check_model_SHA = False #@param{type:"boolean"}
 
-def download_models(diffusion_model,use_secondary_model,fallback=False):
-    model_256_downloaded = False
-    model_512_downloaded = False
-    model_secondary_downloaded = False
+diff_model_map = {
+    '256x256_diffusion_uncond': { 'downloaded': False, 'sha': 'a37c32fffd316cd494cf3f35b339936debdc1576dad13fe57c42399a5dbc78b1', 'uri_list': ['https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt', 'https://www.dropbox.com/s/9tqnqo930mpnpcn/256x256_diffusion_uncond.pt'] },
+    '512x512_diffusion_uncond_finetune_008100': { 'downloaded': False, 'sha': '9c111ab89e214862b76e1fa6a1b3f1d329b1a88281885943d2cdbe357ad57648', 'uri_list': ['https://huggingface.co/lowlevelware/512x512_diffusion_unconditional_ImageNet/resolve/main/512x512_diffusion_uncond_finetune_008100.pt', 'https://the-eye.eu/public/AI/models/512x512_diffusion_unconditional_ImageNet/512x512_diffusion_uncond_finetune_008100.pt'] },
+    'portrait_generator_v001': { 'downloaded': False, 'sha': 'b7e8c747af880d4480b6707006f1ace000b058dd0eac5bb13558ba3752d9b5b9', 'uri_list': ['https://huggingface.co/felipe3dartist/portrait_generator_v001/resolve/main/portrait_generator_v001_ema_0.9999_1MM.pt'] },
+    'pixelartdiffusion_expanded': { 'downloaded': False, 'sha': 'a73b40556634034bf43b5a716b531b46fb1ab890634d854f5bcbbef56838739a', 'uri_list': ['https://huggingface.co/KaliYuga/PADexpanded/resolve/main/PADexpanded.pt'] },
+    'pixel_art_diffusion_hard_256': { 'downloaded': False, 'sha': 'be4a9de943ec06eef32c65a1008c60ad017723a4d35dc13169c66bb322234161', 'uri_list': ['https://huggingface.co/KaliYuga/pixel_art_diffusion_hard_256/resolve/main/pixel_art_diffusion_hard_256.pt'] },
+    'pixel_art_diffusion_soft_256': { 'downloaded': False, 'sha': 'd321590e46b679bf6def1f1914b47c89e762c76f19ab3e3392c8ca07c791039c', 'uri_list': ['https://huggingface.co/KaliYuga/pixel_art_diffusion_soft_256/resolve/main/pixel_art_diffusion_soft_256.pt'] },
+    'pixelartdiffusion4k': { 'downloaded': False, 'sha': 'a1ba4f13f6dabb72b1064f15d8ae504d98d6192ad343572cc416deda7cccac30', 'uri_list': ['https://huggingface.co/KaliYuga/pixelartdiffusion4k/resolve/main/pixelartdiffusion4k.pt'] },
+    'watercolordiffusion_2': { 'downloaded': False, 'sha': '49c281b6092c61c49b0f1f8da93af9b94be7e0c20c71e662e2aa26fee0e4b1a9', 'uri_list': ['https://huggingface.co/KaliYuga/watercolordiffusion_2/resolve/main/watercolordiffusion_2.pt'] },
+    'watercolordiffusion': { 'downloaded': False, 'sha': 'a3e6522f0c8f278f90788298d66383b11ac763dd5e0d62f8252c962c23950bd6', 'uri_list': ['https://huggingface.co/KaliYuga/watercolordiffusion/resolve/main/watercolordiffusion.pt'] },
+    'PulpSciFiDiffusion': { 'downloaded': False, 'sha': 'b79e62613b9f50b8a3173e5f61f0320c7dbb16efad42a92ec94d014f6e17337f', 'uri_list': ['https://huggingface.co/KaliYuga/PulpSciFiDiffusion/resolve/main/PulpSciFiDiffusion.pt'] },
+    'secondary': { 'downloaded': False, 'sha': '983e3de6f95c88c81b2ca7ebb2c217933be1973b1ff058776b970f901584613a', 'uri_list': ['https://huggingface.co/spaces/huggi/secondary_model_imagenet_2.pth/resolve/main/secondary_model_imagenet_2.pth', 'https://the-eye.eu/public/AI/models/v-diffusion/secondary_model_imagenet_2.pth', 'https://ipfs.pollinations.ai/ipfs/bafybeibaawhhk7fhyhvmm7x24zwwkeuocuizbqbcg5nqx64jq42j75rdiy/secondary_model_imagenet_2.pth'] },
+}
 
-    model_256_SHA = '983e3de6f95c88c81b2ca7ebb2c217933be1973b1ff058776b970f901584613a'
-    model_512_SHA = '9c111ab89e214862b76e1fa6a1b3f1d329b1a88281885943d2cdbe357ad57648'
-    model_secondary_SHA = '983e3de6f95c88c81b2ca7ebb2c217933be1973b1ff058776b970f901584613a'
+kaliyuga_pixel_art_model_names = ['pixelartdiffusion_expanded', 'pixel_art_diffusion_hard_256', 'pixel_art_diffusion_soft_256', 'pixelartdiffusion4k', 'PulpSciFiDiffusion']
+kaliyuga_watercolor_model_names = ['watercolordiffusion', 'watercolordiffusion_2']
+kaliyuga_pulpscifi_model_names = ['PulpSciFiDiffusion']
+diffusion_models_256x256_list = ['256x256_diffusion_uncond'] + kaliyuga_pixel_art_model_names + kaliyuga_watercolor_model_names + kaliyuga_pulpscifi_model_names
 
-    model_256_link = 'https://openaipublic.blob.core.windows.net/diffusion/jul-2021/256x256_diffusion_uncond.pt'
-    model_512_link = 'https://v-diffusion.s3.us-west-2.amazonaws.com/512x512_diffusion_uncond_finetune_008100.pt'
-    model_secondary_link = 'https://v-diffusion.s3.us-west-2.amazonaws.com/secondary_model_imagenet_2.pth'
+from urllib.parse import urlparse
 
-    model_256_link_fb = 'https://www.dropbox.com/s/9tqnqo930mpnpcn/256x256_diffusion_uncond.pt'
-    model_512_link_fb = 'https://huggingface.co/lowlevelware/512x512_diffusion_unconditional_ImageNet/resolve/main/512x512_diffusion_uncond_finetune_008100.pt'
-    model_secondary_link_fb = 'https://the-eye.eu/public/AI/models/v-diffusion/secondary_model_imagenet_2.pth'
+def get_model_filename(diffusion_model_name):
+    model_uri = diff_model_map[diffusion_model_name]['uri_list'][0]
+    model_filename = os.path.basename(urlparse(model_uri).path)
+    return model_filename
 
-    model_256_path = f'{model_path}/256x256_diffusion_uncond.pt'
-    model_512_path = f'{model_path}/512x512_diffusion_uncond_finetune_008100.pt'
-    model_secondary_path = f'{model_path}/secondary_model_imagenet_2.pth'
 
-    if fallback:
-        model_256_link = model_256_link_fb
-        model_512_link = model_512_link_fb
-        model_secondary_link = model_secondary_link_fb
-    # Download the diffusion model
-    if diffusion_model == '256x256_diffusion_uncond':
-        if os.path.exists(model_256_path) and check_model_SHA:
-            print('Checking 256 Diffusion File')
-            with open(model_256_path,"rb") as f:
+def download_model(diffusion_model_name, uri_index=0):
+    if diffusion_model_name != 'custom':
+        model_filename = get_model_filename(diffusion_model_name)
+        model_local_path = os.path.join(model_path, model_filename)
+        if os.path.exists(model_local_path) and check_model_SHA:
+            print(f'Checking {diffusion_model_name} File')
+            with open(model_local_path, "rb") as f:
                 bytes = f.read() 
-                hash = hashlib.sha256(bytes).hexdigest();
-            if hash == model_256_SHA:
-                print('256 Model SHA matches')
-                model_256_downloaded = True
+                hash = hashlib.sha256(bytes).hexdigest()
+            if hash == diff_model_map[diffusion_model_name]['sha']:
+                print(f'{diffusion_model_name} SHA matches')
+                diff_model_map[diffusion_model_name]['downloaded'] = True
             else:
-                print("256 Model SHA doesn't match, redownloading...")
-                wget(model_256_link, model_path)
-                if os.path.exists(model_256_path):
-                    model_256_downloaded = True
-                else:
-                    print('First URL Failed using FallBack')
-                    download_models(diffusion_model,use_secondary_model,True)
-        elif os.path.exists(model_256_path) and not check_model_SHA or model_256_downloaded == True:
-            print('256 Model already downloaded, check check_model_SHA if the file is corrupt')
-        else:  
-            wget(model_256_link, model_path)
-            if os.path.exists(model_256_path):
-                model_256_downloaded = True
-            else:
-                print('First URL Failed using FallBack')
-                download_models(diffusion_model,True)
-    elif diffusion_model == '512x512_diffusion_uncond_finetune_008100':
-        if os.path.exists(model_512_path) and check_model_SHA:
-            print('Checking 512 Diffusion File')
-            with open(model_512_path,"rb") as f:
-                  bytes = f.read() 
-                  hash = hashlib.sha256(bytes).hexdigest();
-            if hash == model_512_SHA:
-                print('512 Model SHA matches')
-                if os.path.exists(model_512_path):
-                    model_512_downloaded = True
-                else:
-                    print('First URL Failed using FallBack')
-                    download_models(diffusion_model,use_secondary_model,True)
-            else:  
-                print("512 Model SHA doesn't match, redownloading...")
-                wget(model_512_link, model_path)
-                if os.path.exists(model_512_path):
-                    model_512_downloaded = True
-                else:
-                    print('First URL Failed using FallBack')
-                    download_models(diffusion_model,use_secondary_model,True)
-        elif os.path.exists(model_512_path) and not check_model_SHA or model_512_downloaded:
-            print('512 Model already downloaded, check check_model_SHA if the file is corrupt')
-        else:  
-            wget(model_512_link, model_path)
-            model_512_downloaded = True
-    # Download the secondary diffusion model v2
-    if use_secondary_model:
-        if os.path.exists(model_secondary_path) and check_model_SHA:
-            print('Checking Secondary Diffusion File')
-            with open(model_secondary_path,"rb") as f:
-                bytes = f.read() 
-                hash = hashlib.sha256(bytes).hexdigest();
-            if hash == model_secondary_SHA:
-                print('Secondary Model SHA matches')
-                model_secondary_downloaded = True
-            else:  
-                print("Secondary Model SHA doesn't match, redownloading...")
-                wget(model_secondary_link, model_path)
-                if os.path.exists(model_secondary_path):
-                    model_secondary_downloaded = True
-                else:
-                    print('First URL Failed using FallBack')
-                    download_models(diffusion_model,use_secondary_model,True)
-        elif os.path.exists(model_secondary_path) and not check_model_SHA or model_secondary_downloaded:
-            print('Secondary Model already downloaded, check check_model_SHA if the file is corrupt')
-        else:  
-            wget(model_secondary_link, model_path)
-            if os.path.exists(model_secondary_path):
-                model_secondary_downloaded = True
-            else:
-                print('First URL Failed using FallBack')
-                download_models(diffusion_model,use_secondary_model,True)
+                print(f"{diffusion_model_name} SHA doesn't match. Will redownload it.")
+        elif os.path.exists(model_local_path) and not check_model_SHA or diff_model_map[diffusion_model_name]['downloaded']:
+            print(f'{diffusion_model_name} already downloaded. If the file is corrupt, enable check_model_SHA.')
+            diff_model_map[diffusion_model_name]['downloaded'] = True
 
-download_models(diffusion_model,use_secondary_model)
+        if not diff_model_map[diffusion_model_name]['downloaded']:
+            for model_uri in diff_model_map[diffusion_model_name]['uri_list']:
+                wget(model_uri, model_path)
+                if os.path.exists(model_local_path):
+                    diff_model_map[diffusion_model_name]['downloaded'] = True
+                    return
+                else:
+                    print(f'{diffusion_model_name} model download from {model_uri} failed. Will try any fallback uri.')
+            print(f'{diffusion_model_name} download failed.')
+
+
+# Download the diffusion model(s)
+download_model(diffusion_model)
+if use_secondary_model:
+    download_model('secondary')
 
 model_config = model_and_diffusion_defaults()
 if diffusion_model == '512x512_diffusion_uncond_finetune_008100':
@@ -1849,10 +1977,42 @@ elif diffusion_model == '256x256_diffusion_uncond':
         'use_fp16': not useCPU,
         'use_scale_shift_norm': True,
     })
+elif diffusion_model == 'portrait_generator_v001':
+    model_config.update({
+        'attention_resolutions': '32, 16, 8',
+        'class_cond': False,
+        'diffusion_steps': 1000,
+        'rescale_timesteps': True,
+        'image_size': 512,
+        'learn_sigma': True,
+        'noise_schedule': 'linear',
+        'num_channels': 128,
+        'num_heads': 4,
+        'num_res_blocks': 2,
+        'resblock_updown': True,
+        'use_checkpoint': use_checkpoint,
+        'use_fp16': True,
+        'use_scale_shift_norm': True,
+    })
+else:  # E.g. A model finetuned by KaliYuga
+    model_config.update({
+          'attention_resolutions': '16',
+          'class_cond': False,
+          'diffusion_steps': 1000,
+          'rescale_timesteps': True,
+          'timestep_respacing': 'ddim100',
+          'image_size': 256,
+          'learn_sigma': True,
+          'noise_schedule': 'linear',
+          'num_channels': 128,
+          'num_heads': 1,
+          'num_res_blocks': 2,
+          'use_checkpoint': use_checkpoint,
+          'use_fp16': True,
+          'use_scale_shift_norm': False,
+      })
 
 model_default = model_config['image_size']
-
-
 
 if use_secondary_model:
     secondary_model = SecondaryDiffusionImageNet2()
@@ -1860,17 +2020,63 @@ if use_secondary_model:
     secondary_model.eval().requires_grad_(False).to(device)
 
 clip_models = []
-if ViTB32 is True: clip_models.append(clip.load('ViT-B/32', jit=False)[0].eval().requires_grad_(False).to(device)) 
-if ViTB16 is True: clip_models.append(clip.load('ViT-B/16', jit=False)[0].eval().requires_grad_(False).to(device) ) 
-if ViTL14 is True: clip_models.append(clip.load('ViT-L/14', jit=False)[0].eval().requires_grad_(False).to(device) ) 
-if RN50 is True: clip_models.append(clip.load('RN50', jit=False)[0].eval().requires_grad_(False).to(device))
-if RN50x4 is True: clip_models.append(clip.load('RN50x4', jit=False)[0].eval().requires_grad_(False).to(device)) 
-if RN50x16 is True: clip_models.append(clip.load('RN50x16', jit=False)[0].eval().requires_grad_(False).to(device)) 
-if RN50x64 is True: clip_models.append(clip.load('RN50x64', jit=False)[0].eval().requires_grad_(False).to(device)) 
-if RN101 is True: clip_models.append(clip.load('RN101', jit=False)[0].eval().requires_grad_(False).to(device)) 
+if ViTB32: clip_models.append(clip.load('ViT-B/32', jit=False)[0].eval().requires_grad_(False).to(device))
+if ViTB16: clip_models.append(clip.load('ViT-B/16', jit=False)[0].eval().requires_grad_(False).to(device))
+if ViTL14: clip_models.append(clip.load('ViT-L/14', jit=False)[0].eval().requires_grad_(False).to(device))
+if ViTL14_336px: clip_models.append(clip.load('ViT-L/14@336px', jit=False)[0].eval().requires_grad_(False).to(device))
+if RN50: clip_models.append(clip.load('RN50', jit=False)[0].eval().requires_grad_(False).to(device))
+if RN50x4: clip_models.append(clip.load('RN50x4', jit=False)[0].eval().requires_grad_(False).to(device))
+if RN50x16: clip_models.append(clip.load('RN50x16', jit=False)[0].eval().requires_grad_(False).to(device))
+if RN50x64: clip_models.append(clip.load('RN50x64', jit=False)[0].eval().requires_grad_(False).to(device))
+if RN101: clip_models.append(clip.load('RN101', jit=False)[0].eval().requires_grad_(False).to(device))
+if ViTB32_laion2b_e16: clip_models.append(open_clip.create_model('ViT-B-32', pretrained='laion2b_e16').eval().requires_grad_(False).to(device))
+if ViTB32_laion400m_e31: clip_models.append(open_clip.create_model('ViT-B-32', pretrained='laion400m_e31').eval().requires_grad_(False).to(device))
+if ViTB32_laion400m_32: clip_models.append(open_clip.create_model('ViT-B-32', pretrained='laion400m_e32').eval().requires_grad_(False).to(device))
+if ViTB32quickgelu_laion400m_e31: clip_models.append(open_clip.create_model('ViT-B-32-quickgelu', pretrained='laion400m_e31').eval().requires_grad_(False).to(device))
+if ViTB32quickgelu_laion400m_e32: clip_models.append(open_clip.create_model('ViT-B-32-quickgelu', pretrained='laion400m_e32').eval().requires_grad_(False).to(device))
+if ViTB16_laion400m_e31: clip_models.append(open_clip.create_model('ViT-B-16', pretrained='laion400m_e31').eval().requires_grad_(False).to(device))
+if ViTB16_laion400m_e32: clip_models.append(open_clip.create_model('ViT-B-16', pretrained='laion400m_e32').eval().requires_grad_(False).to(device))
+if RN50_yffcc15m: clip_models.append(open_clip.create_model('RN50', pretrained='yfcc15m').eval().requires_grad_(False).to(device))
+if RN50_cc12m: clip_models.append(open_clip.create_model('RN50', pretrained='cc12m').eval().requires_grad_(False).to(device))
+if RN50_quickgelu_yfcc15m: clip_models.append(open_clip.create_model('RN50-quickgelu', pretrained='yfcc15m').eval().requires_grad_(False).to(device))
+if RN50_quickgelu_cc12m: clip_models.append(open_clip.create_model('RN50-quickgelu', pretrained='cc12m').eval().requires_grad_(False).to(device))
+if RN101_yfcc15m: clip_models.append(open_clip.create_model('RN101', pretrained='yfcc15m').eval().requires_grad_(False).to(device))
+if RN101_quickgelu_yfcc15m: clip_models.append(open_clip.create_model('RN101-quickgelu', pretrained='yfcc15m').eval().requires_grad_(False).to(device))
 
 normalize = T.Normalize(mean=[0.48145466, 0.4578275, 0.40821073], std=[0.26862954, 0.26130258, 0.27577711])
 lpips_model = lpips.LPIPS(net='vgg').to(device)
+
+# %%
+# !! {"metadata":{
+# !!   "id": "CustModelTop"
+# !! }}
+"""
+# Custom model settings 
+Modify in accordance with your training settings and run the cell
+"""
+
+# %%
+# !! {"metadata":{
+# !!   "id": "CustModel"
+# !! }}
+#@markdown ####**Custom Model Settings:**
+if diffusion_model == 'custom':
+  model_config.update({
+          'attention_resolutions': '16',
+          'class_cond': False,
+          'diffusion_steps': 1000,
+          'rescale_timesteps': True,
+          'timestep_respacing': 'ddim100',
+          'image_size': 256,
+          'learn_sigma': True,
+          'noise_schedule': 'linear',
+          'num_channels': 128,
+          'num_heads': 1,
+          'num_res_blocks': 2,
+          'use_checkpoint': use_checkpoint,
+          'use_fp16': True,
+          'use_scale_shift_norm': False,
+      })
 
 # %%
 # !! {"metadata":{
@@ -1887,21 +2093,35 @@ lpips_model = lpips.LPIPS(net='vgg').to(device)
 #@markdown ####**Basic Settings:**
 batch_name = 'TimeToDisco' #@param{type: 'string'}
 steps = 250 #@param [25,50,100,150,250,500,1000]{type: 'raw', allow-input: true}
-width_height = [1280, 768]#@param{type: 'raw'}
+width_height_for_512x512_models = [1280, 768] #@param{type: 'raw'}
 clip_guidance_scale = 5000 #@param{type: 'number'}
-tv_scale =  0#@param{type: 'number'}
-range_scale =   150#@param{type: 'number'}
-sat_scale =   0#@param{type: 'number'}
-cutn_batches = 4  #@param{type: 'number'}
+tv_scale = 0#@param{type: 'number'}
+range_scale = 150#@param{type: 'number'}
+sat_scale = 0#@param{type: 'number'}
+cutn_batches = 4#@param{type: 'number'}
 skip_augs = False#@param{type: 'boolean'}
+
+#@markdown ####**Image dimensions to be used for 256x256 models (e.g. pixelart models):**
+width_height_for_256x256_models = [512, 448] #@param{type: 'raw'}
+
+#@markdown ####**Video Init Basic Settings:**
+video_init_steps = 100 #@param [25,50,100,150,250,500,1000]{type: 'raw', allow-input: true}
+video_init_clip_guidance_scale = 1000 #@param{type: 'number'}
+video_init_tv_scale = 0.1#@param{type: 'number'}
+video_init_range_scale = 150#@param{type: 'number'}
+video_init_sat_scale = 300#@param{type: 'number'}
+video_init_cutn_batches = 4#@param{type: 'number'}
+video_init_skip_steps = 50 #@param{type: 'integer'}
 
 #@markdown ---
 
-#@markdown ####**Init Settings:**
+#@markdown ####**Init Image Settings:**
 init_image = None #@param{type: 'string'}
 init_scale = 1000 #@param{type: 'integer'}
 skip_steps = 10 #@param{type: 'integer'}
 #@markdown *Make sure you set skip_steps to ~50% of your steps if you want to use an init image.*
+
+width_height = width_height_for_256x256_models if diffusion_model in diffusion_models_256x256_list else width_height_for_512x512_models
 
 #Get corrected sizes
 side_x = (width_height[0]//64)*64;
@@ -1909,17 +2129,10 @@ side_y = (width_height[1]//64)*64;
 if side_x != width_height[0] or side_y != width_height[1]:
     print(f'Changing output size to {side_x}x{side_y}. Dimensions must by multiples of 64.')
 
-#Update Model Settings
-timestep_respacing = f'ddim{steps}'
-diffusion_steps = (1000//steps)*steps if steps < 1000 else steps
-model_config.update({
-    'timestep_respacing': timestep_respacing,
-    'diffusion_steps': diffusion_steps,
-})
-
 #Make folder for batch
 batchFolder = f'{outDirPath}/{batch_name}'
 createPath(batchFolder)
+
 
 # %%
 # !! {"metadata":{
@@ -1942,27 +2155,37 @@ animation_mode = 'None' #@param ['None', '2D', '3D', 'Video Input'] {type:'strin
 
 #@markdown ####**Video Input Settings:**
 if is_colab:
-    video_init_path = "/content/training.mp4" #@param {type: 'string'}
+    video_init_path = "/content/drive/MyDrive/init.mp4" #@param {type: 'string'}
 else:
-    video_init_path = "training.mp4" #@param {type: 'string'}
+    video_init_path = "init.mp4" #@param {type: 'string'}
 extract_nth_frame = 2 #@param {type: 'number'}
-video_init_seed_continuity = True #@param {type: 'boolean'}
-
+persistent_frame_output_in_batch_folder = True #@param {type: 'boolean'}
+video_init_seed_continuity = False #@param {type: 'boolean'}
+#@markdown #####**Video Optical Flow Settings:**
+video_init_flow_warp = True #@param {type: 'boolean'}
+# Call optical flow from video frames and warp prev frame with flow
+video_init_flow_blend =  0.999#@param {type: 'number'} #0 - take next frame, 1 - take prev warped frame
+video_init_check_consistency = False #Insert param here when ready
+video_init_blend_mode = "optical flow" #@param ['None', 'linear', 'optical flow']
+# Call optical flow from video frames and warp prev frame with flow
 if animation_mode == "Video Input":
-  if is_colab:
-      videoFramesFolder = f'/content/videoFrames'
-  else:
-      videoFramesFolder = f'videoFrames'
-  createPath(videoFramesFolder)
-  print(f"Exporting Video Frames (1 every {extract_nth_frame})...")
-  try:
-      for f in pathlib.Path(f'{videoFramesFolder}').glob('*.jpg'):
-          f.unlink()
-  except:
-      print('')
-  vf = f'select=not(mod(n\,{extract_nth_frame}))'
-  subprocess.run(['ffmpeg', '-i', f'{video_init_path}', '-vf', f'{vf}', '-vsync', 'vfr', '-q:v', '2', '-loglevel', 'error', '-stats', f'{videoFramesFolder}/%04d.jpg'], stdout=subprocess.PIPE).stdout.decode('utf-8')
-  #!ffmpeg -i {video_init_path} -vf {vf} -vsync vfr -q:v 2 -loglevel error -stats {videoFramesFolder}/%04d.jpg
+    if persistent_frame_output_in_batch_folder or (not is_colab): #suggested by Chris the Wizard#8082 at discord
+        videoFramesFolder = f'{batchFolder}/videoFrames'
+    else:
+        videoFramesFolder = f'/content/videoFrames'
+    createPath(videoFramesFolder)
+    print(f"Exporting Video Frames (1 every {extract_nth_frame})...")
+    try:
+        for f in pathlib.Path(f'{videoFramesFolder}').glob('*.jpg'):
+            f.unlink()
+    except:
+        print('')
+    vf = f'select=not(mod(n\,{extract_nth_frame}))'
+    if os.path.exists(video_init_path):
+        subprocess.run(['ffmpeg', '-i', f'{video_init_path}', '-vf', f'{vf}', '-vsync', 'vfr', '-q:v', '2', '-loglevel', 'error', '-stats', f'{videoFramesFolder}/%04d.jpg'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+    else: 
+        print(f'\nWARNING!\n\nVideo not found: {video_init_path}.\nPlease check your video path.\n')
+    #!ffmpeg -i {video_init_path} -vf {vf} -vsync vfr -q:v 2 -loglevel error -stats {videoFramesFolder}/%04d.jpg
 
 
 #@markdown ---
@@ -1998,7 +2221,7 @@ sampling_mode = 'bicubic'#@param {type:"string"}
 #@markdown ---
 #@markdown ####**Turbo Mode (3D anim only):**
 #@markdown (Starts after frame 10,) skips diffusion steps and just uses depth map to warp images for skipped frames.
-#@markdown Speeds up rendering by 2x-4x, and may improve image coherence between frames. frame_blend_mode smooths abrupt texture changes across 2 frames.
+#@markdown Speeds up rendering by 2x-4x, and may improve image coherence between frames.
 #@markdown For different settings tuned for Turbo Mode, refer to the original Disco-Turbo Github: https://github.com/zippy731/disco-diffusion-turbo
 
 turbo_mode = False #@param {type:"boolean"}
@@ -2019,6 +2242,12 @@ if turbo_mode and animation_mode != '3D':
 frames_scale = 1500 #@param{type: 'integer'}
 #@markdown `frame_skip_steps` will blur the previous frame - higher values will flicker less but struggle to add enough new detail to zoom into.
 frames_skip_steps = '60%' #@param ['40%', '50%', '60%', '70%', '80%'] {type: 'string'}
+
+#@markdown ####**Video Init Coherency Settings:**
+#@markdown `frame_scale` tries to guide the new frame to looking like the old one. A good default is 1500.
+video_init_frames_scale = 15000 #@param{type: 'integer'}
+#@markdown `frame_skip_steps` will blur the previous frame - higher values will flicker less but struggle to add enough new detail to zoom into.
+video_init_frames_skip_steps = '70%' #@param ['40%', '50%', '60%', '70%', '80%'] {type: 'string'}
 
 #======= VR MODE
 #@markdown ---
@@ -2288,6 +2517,232 @@ else:
 
 # %%
 # !! {"metadata":{
+# !!   "id": "InstallRAFT"
+# !! }}
+#@title Install RAFT for Video input animation mode only
+#@markdown Run once per session. Doesn't download again if model path exists.
+#@markdown Use force download to reload raft models if needed
+force_download = False #@param {type:'boolean'}
+if animation_mode == 'Video Input':
+    try:
+        from raft import RAFT
+    except:
+        if not os.path.exists(os.path.join(PROJECT_DIR, 'RAFT')):
+            gitclone('https://github.com/princeton-vl/RAFT', os.path.join(PROJECT_DIR, 'RAFT'))
+        sys.path.append(f'{PROJECT_DIR}/RAFT')
+
+    if (not (os.path.exists(f'{root_path}/RAFT/models'))) or force_download:
+        createPath(f'{root_path}/RAFT')
+        os.chdir(f'{root_path}/RAFT')
+        sub_p_res = subprocess.run(['bash', f'{PROJECT_DIR}/RAFT/download_models.sh'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        print(sub_p_res)
+        os.chdir(PROJECT_DIR)
+
+# %%
+# !! {"metadata":{
+# !!   "id": "FlowFns1"
+# !! }}
+#@title Define optical flow functions for Video input animation mode only
+if animation_mode == 'Video Input':
+    in_path = videoFramesFolder
+    flo_folder = f'{in_path}/out_flo_fwd'
+    path = f'{PROJECT_DIR}/RAFT/core'
+    import sys
+    sys.path.append(f'{PROJECT_DIR}/RAFT/core')
+    os.chdir(f'{PROJECT_DIR}/RAFT/core')
+    print(os.getcwd())
+  
+    print("Renaming RAFT core's utils.utils to raftutils.utils (to avoid a naming conflict with AdaBins)")
+    if not os.path.exists(f'{PROJECT_DIR}/RAFT/core/raftutils'):
+        os.rename(f'{PROJECT_DIR}/RAFT/core/utils', f'{PROJECT_DIR}/RAFT/core/raftutils')
+        sub_p_res = subprocess.run(['sed', '-i', 's/from utils.utils/from raftutils.utils/g', f'{PROJECT_DIR}/RAFT/core/corr.py'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+        sub_p_res = subprocess.run(['sed', '-i', 's/from utils.utils/from raftutils.utils/g', f'{PROJECT_DIR}/RAFT/core/raft.py'], stdout=subprocess.PIPE).stdout.decode('utf-8')
+
+    from raftutils.utils import InputPadder
+    from raft import RAFT
+    from raftutils import flow_viz
+    import numpy as np
+    import argparse, PIL, cv2
+    from PIL import Image
+    from tqdm.notebook import tqdm
+    from glob import glob
+    import torch
+  
+    args2 = argparse.Namespace()
+    args2.small = False
+    args2.mixed_precision = True
+  
+  
+    TAG_CHAR = np.array([202021.25], np.float32)
+  
+    def writeFlow(filename,uv,v=None):
+        """ 
+        https://github.com/NVIDIA/flownet2-pytorch/blob/master/utils/flow_utils.py
+        Copyright 2017 NVIDIA CORPORATION
+  
+        Licensed under the Apache License, Version 2.0 (the "License");
+        you may not use this file except in compliance with the License.
+        You may obtain a copy of the License at
+  
+            http://www.apache.org/licenses/LICENSE-2.0
+  
+        Unless required by applicable law or agreed to in writing, software
+        distributed under the License is distributed on an "AS IS" BASIS,
+        WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+        See the License for the specific language governing permissions and
+        limitations under the License.
+        
+        Write optical flow to file.
+        
+        If v is None, uv is assumed to contain both u and v channels,
+        stacked in depth.
+        Original code by Deqing Sun, adapted from Daniel Scharstein.
+        """
+        nBands = 2
+  
+        if v is None:
+            assert(uv.ndim == 3)
+            assert(uv.shape[2] == 2)
+            u = uv[:,:,0]
+            v = uv[:,:,1]
+        else:
+            u = uv
+  
+        assert(u.shape == v.shape)
+        height,width = u.shape
+        f = open(filename,'wb')
+        # write the header
+        f.write(TAG_CHAR)
+        np.array(width).astype(np.int32).tofile(f)
+        np.array(height).astype(np.int32).tofile(f)
+        # arrange into matrix form
+        tmp = np.zeros((height, width*nBands))
+        tmp[:,np.arange(width)*2] = u
+        tmp[:,np.arange(width)*2 + 1] = v
+        tmp.astype(np.float32).tofile(f)
+        f.close()
+  
+    def load_img(img, size):
+        img = Image.open(img).convert('RGB').resize(size)
+        return torch.from_numpy(np.array(img)).permute(2,0,1).float()[None,...].cuda()
+  
+    def get_flow(frame1, frame2, model, iters=20):
+        padder = InputPadder(frame1.shape)
+        frame1, frame2 = padder.pad(frame1, frame2)
+        _, flow12 = model(frame1, frame2, iters=iters, test_mode=True)
+        flow12 = flow12[0].permute(1, 2, 0).detach().cpu().numpy()
+  
+        return flow12
+  
+    def warp_flow(img, flow):
+        h, w = flow.shape[:2]
+        flow = flow.copy()
+        flow[:, :, 0] += np.arange(w)
+        flow[:, :, 1] += np.arange(h)[:, np.newaxis]
+        res = cv2.remap(img, flow, None, cv2.INTER_LINEAR)
+        return res
+  
+    def makeEven(_x):
+        return _x if (_x % 2 == 0) else _x+1
+  
+    def fit(img,maxsize=512):
+        maxdim = max(*img.size)
+        if maxdim>maxsize:
+            # if True:
+            ratio = maxsize/maxdim
+            x,y = img.size
+            size = (makeEven(int(x*ratio)),makeEven(int(y*ratio))) 
+            img = img.resize(size)
+        return img
+  
+    def warp(frame1, frame2, flo_path, blend=0.5, weights_path=None):
+        flow21 = np.load(flo_path)
+        frame1pil = np.array(frame1.convert('RGB').resize((flow21.shape[1],flow21.shape[0])))
+        frame1_warped21 = warp_flow(frame1pil, flow21)
+        # frame2pil = frame1pil
+        frame2pil = np.array(frame2.convert('RGB').resize((flow21.shape[1],flow21.shape[0])))
+    
+        if weights_path:
+            # TBD
+            pass
+        else:
+            blended_w = frame2pil*(1-blend) + frame1_warped21*(blend)
+  
+        return  PIL.Image.fromarray(blended_w.astype('uint8'))
+  
+    in_path = videoFramesFolder
+    flo_folder = f'{in_path}/out_flo_fwd'
+  
+    temp_flo = in_path+'/temp_flo'
+    flo_fwd_folder = in_path+'/out_flo_fwd'
+    # TBD flow backwards!
+  
+    os.chdir(PROJECT_DIR)
+
+
+# %%
+# !! {"metadata":{
+# !!   "id": "FlowFns2"
+# !! }}
+#@title Generate optical flow and consistency maps
+#@markdown Run once per init video
+
+if animation_mode == "Video Input":
+    import gc
+
+    force_flow_generation = False #@param {type:'boolean'}
+    in_path = videoFramesFolder
+    flo_folder = f'{in_path}/out_flo_fwd'
+
+    if not video_init_flow_warp:
+        print('video_init_flow_warp not set, skipping')
+
+    if (animation_mode == 'Video Input') and (video_init_flow_warp):
+        flows = glob(flo_folder+'/*.*')
+        if (len(flows)>0) and not force_flow_generation:
+            print(f'Skipping flow generation:\nFound {len(flows)} existing flow files in current working folder: {flo_folder}.\nIf you wish to generate new flow files, check force_flow_generation and run this cell again.')
+    
+        if (len(flows)==0) or force_flow_generation:
+            frames = sorted(glob(in_path+'/*.*'));
+            if len(frames)<2: 
+                print(f'WARNING!\nCannot create flow maps: Found {len(frames)} frames extracted from your video input.\nPlease check your video path.')
+            if len(frames)>=2:
+        
+                raft_model = torch.nn.DataParallel(RAFT(args2))
+                raft_model.load_state_dict(torch.load(f'{root_path}/RAFT/models/raft-things.pth'))
+                raft_model = raft_model.module.cuda().eval()
+        
+                for f in pathlib.Path(f'{flo_fwd_folder}').glob('*.*'):
+                    f.unlink()
+        
+                temp_flo = in_path+'/temp_flo'
+                flo_fwd_folder = in_path+'/out_flo_fwd'
+        
+                createPath(flo_fwd_folder)
+                createPath(temp_flo)
+        
+                # TBD Call out to a consistency checker?
+        
+                framecount = 0
+                for frame1, frame2 in tqdm(zip(frames[:-1], frames[1:]), total=len(frames)-1):
+        
+                    out_flow21_fn = f"{flo_fwd_folder}/{frame1.split('/')[-1]}"
+            
+                    frame1 = load_img(frame1, width_height)
+                    frame2 = load_img(frame2, width_height)
+            
+                    flow21 = get_flow(frame2, frame1, raft_model)
+                    np.save(out_flow21_fn, flow21)
+            
+                    if video_init_check_consistency:
+                        # TBD
+                        pass
+
+                del raft_model 
+                gc.collect()
+
+# %%
+# !! {"metadata":{
 # !!   "id": "ExtraSetTop"
 # !! }}
 """
@@ -2334,7 +2789,7 @@ if intermediate_saves and intermediates_in_subfolder is True:
 perlin_init = False  #@param{type: 'boolean'}
 perlin_mode = 'mixed' #@param ['mixed', 'color', 'gray']
 set_seed = 'random_seed' #@param{type: 'string'}
-eta = 0.8#@param{type: 'number'}
+eta = 0.8 #@param{type: 'number'}
 clamp_grad = True #@param{type: 'boolean'}
 clamp_max = 0.05 #@param{type: 'number'}
 
@@ -2354,9 +2809,39 @@ rand_mag = 0.05
 #@markdown cut_overview and cut_innercut are cumulative for total cutn on any given step. Overview cuts see the entire image and are good for early structure, innercuts are your standard cutn.
 
 cut_overview = "[12]*400+[4]*600" #@param {type: 'string'}       
-cut_innercut ="[4]*400+[12]*600"#@param {type: 'string'}  
-cut_ic_pow = 1#@param {type: 'number'}  
-cut_icgray_p = "[0.2]*400+[0]*600"#@param {type: 'string'}
+cut_innercut = "[4]*400+[12]*600" #@param {type: 'string'}  
+cut_ic_pow = "[1]*1000" #@param {type: 'string'}  
+cut_icgray_p = "[0.2]*400+[0]*600" #@param {type: 'string'}
+
+#@markdown KaliYuga model settings. Refer to [cut_ic_pow](https://ezcharts.miraheze.org/wiki/Category:Cut_ic_pow) as a guide. Values between 1 and 100 all work.
+pad_or_pulp_cut_overview = "[15]*100+[15]*100+[12]*100+[12]*100+[6]*100+[4]*100+[2]*200+[0]*200" #@param {type: 'string'}
+pad_or_pulp_cut_innercut = "[1]*100+[1]*100+[4]*100+[4]*100+[8]*100+[8]*100+[10]*200+[10]*200" #@param {type: 'string'}
+pad_or_pulp_cut_ic_pow = "[12]*300+[12]*100+[12]*50+[12]*50+[10]*100+[10]*100+[10]*300" #@param {type: 'string'}
+pad_or_pulp_cut_icgray_p = "[0.87]*100+[0.78]*50+[0.73]*50+[0.64]*60+[0.56]*40+[0.50]*50+[0.33]*100+[0.19]*150+[0]*400" #@param {type: 'string'}
+
+watercolor_cut_overview = "[14]*200+[12]*200+[4]*400+[0]*200" #@param {type: 'string'}
+watercolor_cut_innercut = "[2]*200+[4]*200+[12]*400+[12]*200" #@param {type: 'string'}
+watercolor_cut_ic_pow = "[12]*300+[12]*100+[12]*50+[12]*50+[10]*100+[10]*100+[10]*300" #@param {type: 'string'}
+watercolor_cut_icgray_p = "[0.7]*100+[0.6]*100+[0.45]*100+[0.3]*100+[0]*600" #@param {type: 'string'}
+
+if (diffusion_model in kaliyuga_pixel_art_model_names) or (diffusion_model in kaliyuga_pulpscifi_model_names):
+    cut_overview = pad_or_pulp_cut_overview
+    cut_innercut = pad_or_pulp_cut_innercut
+    cut_ic_pow = pad_or_pulp_cut_ic_pow
+    cut_icgray_p = pad_or_pulp_cut_icgray_p
+elif diffusion_model in kaliyuga_watercolor_model_names:
+    cut_overview = watercolor_cut_overview
+    cut_innercut = watercolor_cut_innercut
+    cut_ic_pow = watercolor_cut_ic_pow
+    cut_icgray_p = watercolor_cut_icgray_p
+
+#@markdown ---
+
+#@markdown ####**Transformation Settings:**
+use_vertical_symmetry = False #@param {type:"boolean"}
+use_horizontal_symmetry = False #@param {type:"boolean"}
+transformation_percent = [0.09] #@param
+
 
 # %%
 # !! {"metadata":{
@@ -2371,6 +2856,7 @@ cut_icgray_p = "[0.2]*400+[0]*600"#@param {type: 'string'}
 # !! {"metadata":{
 # !!   "id": "Prompts"
 # !! }}
+# Note: If using a pixelart diffusion model, try adding "#pixelart" to the end of the prompt for a stronger effect. It'll tend to work a lot better!
 text_prompts = {
     0: ["A beautiful painting of a singular lighthouse, shining its light across a tumultuous sea of blood by greg rutkowski and thomas kinkade, Trending on artstation.", "yellow color scheme"],
     100: ["This set of prompts start at frame 100","This prompt has weight five:5"],
@@ -2394,8 +2880,11 @@ image_prompts = {
 # !! }}
 #@title Do the Run!
 #@markdown `n_batches` ignored with animation modes.
-display_rate =  50 #@param{type: 'number'}
-n_batches =  50 #@param{type: 'number'}
+display_rate = 20 #@param{type: 'number'}
+n_batches = 50 #@param{type: 'number'}
+
+if animation_mode == 'Video Input':
+    steps = video_init_steps
 
 #Update Model Settings
 timestep_respacing = f'ddim{steps}'
@@ -2428,9 +2917,16 @@ if retain_overwritten_frames:
 skip_step_ratio = int(frames_skip_steps.rstrip("%")) / 100
 calc_frames_skip_steps = math.floor(steps * skip_step_ratio)
 
+if animation_mode == 'Video Input':
+    frames = sorted(glob(in_path+'/*.*'));
+    if len(frames)==0: 
+        sys.exit("ERROR: 0 frames found.\nPlease check your video input path and rerun the video settings cell.")
+    flows = glob(flo_folder+'/*.*')
+    if (len(flows)==0) and video_init_flow_warp:
+        sys.exit("ERROR: 0 flow files found.\nPlease rerun the flow generation cell.")
 
 if steps <= calc_frames_skip_steps:
-  sys.exit("ERROR: You can't skip more steps than your total steps")
+    sys.exit("ERROR: You can't skip more steps than your total steps")
 
 if resume_run:
     if run_to_resume == 'latest':
@@ -2524,14 +3020,13 @@ args = {
     'rotation_3d_y_series':rotation_3d_y_series,
     'rotation_3d_z_series':rotation_3d_z_series,
     'frames_scale': frames_scale,
-    'calc_frames_skip_steps': calc_frames_skip_steps,
     'skip_step_ratio': skip_step_ratio,
     'calc_frames_skip_steps': calc_frames_skip_steps,
     'text_prompts': text_prompts,
     'image_prompts': image_prompts,
     'cut_overview': eval(cut_overview),
     'cut_innercut': eval(cut_innercut),
-    'cut_ic_pow': cut_ic_pow,
+    'cut_ic_pow': eval(cut_ic_pow),
     'cut_icgray_p': eval(cut_icgray_p),
     'intermediate_saves': intermediate_saves,
     'intermediates_in_subfolder': intermediates_in_subfolder,
@@ -2547,13 +3042,49 @@ args = {
     'clip_denoised': clip_denoised,
     'fuzzy_prompt': fuzzy_prompt,
     'rand_mag': rand_mag,
+    'turbo_mode':turbo_mode,
+    'turbo_steps':turbo_steps,
+    'turbo_preroll':turbo_preroll,
+    'use_vertical_symmetry': use_vertical_symmetry,
+    'use_horizontal_symmetry': use_horizontal_symmetry,
+    'transformation_percent': transformation_percent,
+    #video init settings
+    'video_init_steps': video_init_steps,
+    'video_init_clip_guidance_scale': video_init_clip_guidance_scale,
+    'video_init_tv_scale': video_init_tv_scale,
+    'video_init_range_scale': video_init_range_scale,
+    'video_init_sat_scale': video_init_sat_scale,
+    'video_init_cutn_batches': video_init_cutn_batches,
+    'video_init_skip_steps': video_init_skip_steps,
+    'video_init_frames_scale': video_init_frames_scale,
+    'video_init_frames_skip_steps': video_init_frames_skip_steps,
+    #warp settings
+    'video_init_flow_warp':video_init_flow_warp,
+    'video_init_flow_blend':video_init_flow_blend,
+    'video_init_check_consistency':video_init_check_consistency,
+    'video_init_blend_mode':video_init_blend_mode
 }
+
+if animation_mode == 'Video Input':
+    # This isn't great in terms of what will get saved to the settings.. but it should work.
+    args['steps'] = args['video_init_steps']
+    args['clip_guidance_scale'] = args['video_init_clip_guidance_scale']
+    args['tv_scale'] = args['video_init_tv_scale']
+    args['range_scale'] = args['video_init_range_scale']
+    args['sat_scale'] = args['video_init_sat_scale']
+    args['cutn_batches'] = args['video_init_cutn_batches']
+    args['skip_steps'] = args['video_init_skip_steps']
+    args['frames_scale'] = args['video_init_frames_scale']
+    args['frames_skip_steps'] = args['video_init_frames_skip_steps']
 
 args = SimpleNamespace(**args)
 
 print('Prepping model...')
 model, diffusion = create_model_and_diffusion(**model_config)
-model.load_state_dict(torch.load(f'{model_path}/{diffusion_model}.pt', map_location='cpu'))
+if diffusion_model == 'custom':
+    model.load_state_dict(torch.load(custom_path, map_location='cpu'))
+else:
+    model.load_state_dict(torch.load(f'{model_path}/{get_model_filename(diffusion_model)}', map_location='cpu'))
 model.requires_grad_(False).eval().to(device)
 for name, param in model.named_parameters():
     if 'qkv' in name or 'norm' in name or 'proj' in name:
@@ -2582,15 +3113,27 @@ finally:
 
 # %%
 # !! {"metadata":{
-# !!   "id": "CreateVid"
+# !!   "id": "CreateVid",
+# !!   "cellView": "form"
 # !! }}
+import PIL
 # @title ### **Create video**
 #@markdown Video file will save in the same folder as your images.
+from tqdm.notebook import trange
+skip_video_for_run_all = False #@param {type: 'boolean'}
 
-skip_video_for_run_all = True #@param {type: 'boolean'}
+if animation_mode == 'Video Input':
+    frames = sorted(glob(in_path+'/*.*'));
+    if len(frames)==0: 
+        sys.exit("ERROR: 0 frames found.\nPlease check your video input path and rerun the video settings cell.")
+    flows = glob(flo_folder+'/*.*')
+    if (len(flows)==0) and video_init_flow_warp:
+        sys.exit("ERROR: 0 flow files found.\nPlease rerun the flow generation cell.")
 
+blend =  0.5#@param {type: 'number'}
+video_init_check_consistency = False #@param {type: 'boolean'}
 if skip_video_for_run_all == True:
-   print('Skipping video creation, uncheck skip_video_for_run_all if you want to run it')
+    print('Skipping video creation, uncheck skip_video_for_run_all if you want to run it')
 
 else:
     # import subprocess in case this cell is run without the above cells
@@ -2618,6 +3161,46 @@ else:
 
     image_path = f"{outDirPath}/{folder}/{folder}({run})_%04d.png"
     filepath = f"{outDirPath}/{folder}/{folder}({run}).mp4"
+
+    if (video_init_blend_mode == 'optical flow') and (animation_mode == 'Video Input'):
+        image_path = f"{outDirPath}/{folder}/flow/{folder}({run})_%04d.png"
+        filepath = f"{outDirPath}/{folder}/{folder}({run})_flow.mp4"
+        if last_frame == 'final_frame':
+            last_frame = len(glob(batchFolder+f"/flow/{folder}({run})_*.png"))
+        flo_out = batchFolder+f"/flow"
+        createPath(flo_out)
+        frames_in = sorted(glob(batchFolder+f"/{folder}({run})_*.png"))
+        shutil.copy(frames_in[0], flo_out)
+        for i in trange(init_frame, min(len(frames_in), last_frame)):
+            frame1_path = frames_in[i-1]
+            frame2_path = frames_in[i]
+  
+            frame1 = PIL.Image.open(frame1_path)
+            frame2 = PIL.Image.open(frame2_path)
+            frame1_stem = f"{(int(frame1_path.split('/')[-1].split('_')[-1][:-4])+1):04}.jpg"
+            flo_path = f"/{flo_folder}/{frame1_stem}.npy"
+            weights_path = None
+            if video_init_check_consistency:
+                # TBD
+                pass
+            warp(frame1, frame2, flo_path, blend=blend, weights_path=weights_path).save(batchFolder+f"/flow/{folder}({run})_{i:04}.png")
+    if video_init_blend_mode == 'linear':
+        image_path = f"{outDirPath}/{folder}/blend/{folder}({run})_%04d.png"
+        filepath = f"{outDirPath}/{folder}/{folder}({run})_blend.mp4"
+        if last_frame == 'final_frame':
+            last_frame = len(glob(batchFolder+f"/blend/{folder}({run})_*.png"))
+        blend_out = batchFolder+f"/blend"
+        createPath(blend_out)
+        frames_in = glob(batchFolder+f"/{folder}({run})_*.png")
+        shutil.copy(frames_in[0], blend_out)
+        for i in trange(1, len(frames_in)):
+            frame1_path = frames_in[i-1]
+            frame2_path = frames_in[i]
+    
+            frame1 = PIL.Image.open(frame1_path)
+            frame2 = PIL.Image.open(frame2_path)
+          
+            frame = PIL.Image.fromarray((np.array(frame1)*(1-blend) + np.array(frame2)*(blend)).astype('uint8')).save(batchFolder+f"/blend/{folder}({run})_{i:04}.png")
 
 
     cmd = [
@@ -2674,10 +3257,14 @@ else:
 # !!       "DefSecModel",
 # !!       "DefSuperRes",
 # !!       "AnimSetTop",
-# !!       "ExtraSetTop"
+# !!       "ExtraSetTop",
+# !!       "InstallRAFT",
+# !!       "CustModel",
+# !!       "FlowFns1",
+# !!       "FlowFns2"
 # !!     ],
 # !!     "machine_shape": "hm",
-# !!     "name": "Disco Diffusion v5.2 [w/ VR Mode]",
+# !!     "name": "Disco Diffusion v5.61 [Now with portrait_generator_v001]",
 # !!     "private_outputs": true,
 # !!     "provenance": [],
 # !!     "include_colab_link": true
